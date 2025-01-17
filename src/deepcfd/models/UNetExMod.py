@@ -2,11 +2,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import weight_norm
+from typing import Callable, List, Optional, Tuple, Union
 from .AutoEncoder import create_layer
 
 
-def create_encoder_block(in_channels, out_channels, kernel_size, wn=True, bn=True,
-                 activation=nn.LeakyReLU, layers=2):
+def create_encoder_block(
+    in_channels: int,
+    out_channels: int,
+    kernel_size: Union[int, Tuple[int, ...]],
+    wn: bool = True,
+    bn: bool = True,
+    activation: Callable[..., nn.Module] = nn.LeakyReLU,
+    layers: int = 2
+) -> nn.Sequential:
     encoder = []
     for i in range(layers):
         _in = out_channels
@@ -17,8 +25,16 @@ def create_encoder_block(in_channels, out_channels, kernel_size, wn=True, bn=Tru
     return nn.Sequential(*encoder)
 
 
-def create_decoder_block(in_channels, out_channels, kernel_size, wn=True, bn=True,
-                 activation=nn.LeakyReLU, layers=2, final_layer=False):
+def create_decoder_block(
+    in_channels: int,
+    out_channels: int,
+    kernel_size: Union[int, Tuple[int, ...]],
+    wn: bool = True,
+    bn: bool = True,
+    activation: Callable[..., nn.Module] = nn.LeakyReLU,
+    layers: int = 2,
+    final_layer: bool = False
+) -> nn.Sequential:
     decoder = []
     for i in range(layers):
         _in = in_channels
@@ -36,7 +52,15 @@ def create_decoder_block(in_channels, out_channels, kernel_size, wn=True, bn=Tru
     return nn.Sequential(*decoder)
 
 
-def create_encoder(in_channels, filters, kernel_size, wn=True, bn=True, activation=nn.LeakyReLU, layers=2):
+def create_encoder(
+    in_channels: int,
+    filters: List[int],
+    kernel_size: Union[int, Tuple[int, ...]],
+    wn: bool = True,
+    bn: bool = True,
+    activation: Callable[..., nn.Module] = nn.LeakyReLU,
+    layers: int = 2
+) -> nn.Sequential:
     encoder = []
     for i in range(len(filters)):
         if i == 0:
@@ -47,7 +71,15 @@ def create_encoder(in_channels, filters, kernel_size, wn=True, bn=True, activati
     return nn.Sequential(*encoder)
 
 
-def create_decoder(out_channels, filters, kernel_size, wn=True, bn=True, activation=nn.LeakyReLU, layers=2):
+def create_decoder(
+    out_channels: int,
+    filters: List[int],
+    kernel_size: Union[int, Tuple[int, ...]],
+    wn: bool = True,
+    bn: bool = True,
+    activation: Callable[..., nn.Module] = nn.LeakyReLU,
+    layers: int = 2
+) -> nn.Sequential:
     decoder = []
     for i in range(len(filters)):
         if i == 0:
@@ -59,8 +91,18 @@ def create_decoder(out_channels, filters, kernel_size, wn=True, bn=True, activat
 
 
 class UNetExMod(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, filters=[16, 32, 64], layers=3,
-                 weight_norm=True, batch_norm=True, activation=nn.LeakyReLU, final_activation=None):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Union[int, Tuple[int, ...]] = 3,
+        filters: List[int] = [16, 32, 64],
+        layers: int = 3,
+        weight_norm: bool = True,
+        batch_norm: bool = True,
+        activation: Callable[..., nn.Module] = nn.LeakyReLU,
+        final_activation: Optional[Callable[..., nn.Module]] = None
+    ) -> None:
         super().__init__()
         assert len(filters) > 0
         self.final_activation = final_activation
@@ -70,10 +112,13 @@ class UNetExMod(nn.Module):
             decoders.append(create_decoder(1, filters, kernel_size, weight_norm, batch_norm, activation, layers))
         self.decoders = nn.Sequential(*decoders)
 
-    def encode(self, x):
-        tensors = []
-        indices = []
-        sizes = []
+    def encode(
+        self, 
+        x: torch.Tensor
+    ) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor], List[torch.Size]]:
+        tensors: List[torch.Tensor] = []
+        indices: List[torch.Tensor] = []
+        sizes: List[torch.Size] = []
         for encoder in self.encoder:
             x = encoder(x)
             sizes.append(x.size())
@@ -82,8 +127,14 @@ class UNetExMod(nn.Module):
             indices.append(ind)
         return x, tensors, indices, sizes
 
-    def decode(self, _x, _tensors, _indices, _sizes):
-        y = []
+    def decode(
+        self, 
+        _x: torch.Tensor, 
+        _tensors: List[torch.Tensor], 
+        _indices: List[torch.Tensor], 
+        _sizes: List[torch.Size]
+    ) -> torch.Tensor:
+        y: List[torch.Tensor] = []
         for _decoder in self.decoders:
             x = _x
             tensors = _tensors[:]
@@ -99,7 +150,7 @@ class UNetExMod(nn.Module):
             y.append(x)
         return torch.cat(y, dim=1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x, tensors, indices, sizes = self.encode(x)
         x = self.decode(x, tensors, indices, sizes)
         if self.final_activation is not None:
